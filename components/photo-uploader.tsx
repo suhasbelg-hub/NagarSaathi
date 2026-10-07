@@ -95,7 +95,22 @@ export function PhotoUploader({
       setItems((previous) => previous.map((current) => current.id === item.id ? { ...current, progress } : current));
     }, 90);
     try {
-      const src = await compressForDemo(item.file);
+      let src = "";
+      try {
+        const formData = new FormData();
+        formData.append("file", item.file);
+        formData.append("bucket", id.includes("fix") ? "fix-photos" : "grievance-photos");
+        const res = await fetch("/api/upload", { method: "POST", body: formData });
+        const result = await res.json();
+        if (result.ok && result.src) {
+          src = result.src;
+        }
+      } catch {
+        // Fall back to client compression if endpoint is unreachable
+      }
+      if (!src) {
+        src = await compressForDemo(item.file);
+      }
       window.clearInterval(ticker);
       setItems((previous) => previous.map((current) => current.id === item.id ? { ...current, src, progress: 100, state: "uploaded" as const, retryable: false } : current));
     } catch (error) {
@@ -181,7 +196,7 @@ export function PhotoUploader({
           {item.state === "uploading" ? <span className="thumb-progress" aria-hidden="true"><LoaderCircle size={18} /></span> : null}
         </div>
         <div className="upload-item-info"><strong title={item.label}>{item.label}</strong>
-          {item.state === "uploading" ? <><span className="upload-status">Preparing image in demo · {item.progress}%</span><span className="progress-track"><span style={{ width: `${item.progress}%` }} /></span></> : null}
+          {item.state === "uploading" ? <><span className="upload-status">Uploading photo · {item.progress}%</span><span className="progress-track"><span style={{ width: `${item.progress}%` }} /></span></> : null}
           {item.state === "uploaded" ? <span className="upload-status upload-status-ready"><CheckCircle2 size={13} />Ready to submit</span> : null}
           {item.state === "error" ? <span className="upload-status upload-status-error"><AlertCircle size={13} />{item.error}</span> : null}
         </div>

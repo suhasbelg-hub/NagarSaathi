@@ -34,10 +34,10 @@ export function StaffDashboard() {
   const statusCounts = STATUS_ORDER.map((status) => ({ status, count: data.grievances.filter((item) => item.status === status).length }));
   const overdue = data.grievances.filter((item) => item.status !== "resolved" && slaDeadline(item.createdAt, item.priority).getTime() < Date.now());
   const urgent = [...data.grievances].filter((item) => item.status !== "resolved").sort((a, b) => slaDeadline(a.createdAt, a.priority).getTime() - slaDeadline(b.createdAt, b.priority).getTime()).slice(0, 4);
-  if (showError) return <div className="screen-stack"><PageHeader title="Operations overview" /><ErrorState title="The operations overview could not refresh" message="Your work is safe. Retry to return to the local demo view." onRetry={() => setShowError(false)} /></div>;
+  if (showError) return <div className="screen-stack"><PageHeader title="Operations overview" /><ErrorState title="The operations overview could not refresh" message="Retry to refresh your operations overview." onRetry={() => setShowError(false)} /></div>;
   return <div className="screen-stack">
     <PageHeader eyebrow="Municipal operations" title="Operations overview" description="See what needs attention and keep work moving through the queue." action={<Link href="/dashboard/staff/queue" className="button button-primary button-md">Open triage queue <ArrowRight size={16} /></Link>} />
-    <section className="staff-overview-banner"><div className="overview-banner-icon"><Activity size={22} /></div><div><p className="eyebrow">Municipal service snapshot</p><h2>{overdue.length ? `${overdue.length} ${overdue.length === 1 ? "grievance is" : "grievances are"} past its SLA deadline.` : "Your queue is within its SLA windows."}</h2><p>Prioritise urgent work first. Every status change is reflected in the shared demo record.</p></div><div className="staff-banner-metric"><strong className="tabular">{overdue.length}</strong><span>Overdue</span></div></section>
+    <section className="staff-overview-banner"><div className="overview-banner-icon"><Activity size={22} /></div><div><p className="eyebrow">Municipal service snapshot</p><h2>{overdue.length ? `${overdue.length} ${overdue.length === 1 ? "grievance is" : "grievances are"} past its SLA deadline.` : "Your queue is within its SLA windows."}</h2><p>Prioritise urgent work first. Every status change is reflected in the shared civic record.</p></div><div className="staff-banner-metric"><strong className="tabular">{overdue.length}</strong><span>Overdue</span></div></section>
     <section className="stat-grid staff-stats" aria-label="Grievance counts by status">
       {statusCounts.map(({ status, count }) => <div className={`status-metric-card status-metric-${status}`} key={status}><div><span className="status-metric-label">{status === "in_progress" ? "In progress" : status[0].toUpperCase() + status.slice(1)}</span><strong className="tabular">{count}</strong></div><span className="status-metric-track"><i style={{ width: `${data.grievances.length ? Math.max(10, count / data.grievances.length * 100) : 0}%` }} /></span></div>)}
     </section>
@@ -47,7 +47,6 @@ export function StaffDashboard() {
         <span className="urgent-priority-icon"><AlarmClock size={17} /></span><span className="urgent-main"><strong>{categoryName(item.categoryId)}</strong><span>{item.id} · {item.zone}</span></span><StatusBadge status={item.status} small /><PriorityChip priority={item.priority} /><SlaCountdown grievance={item} compact /><ArrowRight size={16} className="card-arrow" />
       </Link>)}</div> : <Card><EmptyState title="No active grievances" description="New reports will appear here for triage." icon={CheckCircle2} compact /></Card>}
     </section>
-    <button type="button" className="subtle-demo-action" onClick={() => setShowError(true)}>Preview a recoverable overview error</button>
   </div>;
 }
 
@@ -163,10 +162,10 @@ export function StaffQueue() {
   const defaultStatusesSelected = statuses.length === 2 && statuses.includes("filed") && statuses.includes("triaged");
   const filterCount = zones.length + categories.length + priorities.length + (defaultStatusesSelected ? 0 : 1);
 
-  if (showError) return <div className="screen-stack"><PageHeader title="Triage queue" description="Filter by zone, category, priority and current status." /><ErrorState title="The queue could not be refreshed" message="Showing the recoverable demo state. Retry to return to the latest local data." onRetry={() => setShowError(false)} /></div>;
+  if (showError) return <div className="screen-stack"><PageHeader title="Triage queue" description="Filter by zone, category, priority and current status." /><ErrorState title="The queue could not be refreshed" message="Retry to reload the latest triage queue." onRetry={() => setShowError(false)} /></div>;
 
   return <div className="screen-stack">
-    <PageHeader eyebrow="Municipal operations" title="Triage queue" description="Filter by zone, category, priority and status. SLA urgency is the default sort." action={<span className="queue-live-note"><span className="connection-dot" />Live demo queue</span>} />
+    <PageHeader eyebrow="Municipal operations" title="Triage queue" description="Filter by zone, category, priority and status. SLA urgency is the default sort." action={<span className="queue-live-note"><span className="connection-dot" />Live queue</span>} />
     <span className="sr-only" aria-live="polite" aria-atomic="true">{updateAnnouncement}</span>
     <Card className="queue-filter-card">
       <div className="queue-filter-head"><div><h2>Find a grievance</h2><p>Combine filters to focus on the next action.</p></div><span className="result-count" aria-live="polite">{filtered.length} matching</span></div>
@@ -185,7 +184,7 @@ export function StaffQueue() {
       <div className="desktop-table-wrap"><table className="data-table queue-table"><caption className="sr-only">Grievance triage queue, sorted by {sort === "sla" ? "SLA urgency" : sort}</caption><thead><tr><th scope="col">Reference / category</th><th scope="col">Zone</th><th scope="col">Status</th><th scope="col">Priority</th><th scope="col" aria-sort={sort === "newest" ? "descending" : sort === "oldest" ? "ascending" : "none"}><button type="button" className="table-sort-button" onClick={() => setSort(sort === "newest" ? "oldest" : "newest")} aria-label="Sort by filed date">Filed <span aria-hidden="true">↕</span></button></th><th scope="col" aria-sort={sort === "sla" ? "ascending" : "none"}><button type="button" className="table-sort-button" onClick={() => setSort("sla")} aria-label="Sort by SLA urgency">SLA countdown <span aria-hidden="true">↕</span></button></th><th scope="col"><span className="sr-only">Action</span></th></tr></thead><tbody>{filtered.map((item) => <QueueTableRow key={item.id} grievance={item} newEntry={newGrievanceIds.includes(item.id)} />)}</tbody></table></div>
       <div className="mobile-queue-cards">{filtered.map((item) => <QueueMobileCard key={item.id} grievance={item} newEntry={newGrievanceIds.includes(item.id)} />)}</div>
     </> : <Card><EmptyState title="No grievances match your filters" description="Try changing a status, zone or priority, or clear filters to return to the default triage queue." icon={SlidersHorizontal} action={<Button variant="outline" onClick={clear}>Clear filters</Button>} /></Card>}
-    <div className="queue-footnote"><span><AlarmClock size={14} /> SLA windows: Critical 12h · High 24h · Medium 48h · Low 72h</span><button type="button" className="subtle-demo-action" onClick={() => setShowError(true)}>Preview a recoverable queue error</button></div>
+    <div className="queue-footnote"><span><AlarmClock size={14} /> SLA windows: Critical 12h · High 24h · Medium 48h · Low 72h</span></div>
   </div>;
 }
 
@@ -215,7 +214,7 @@ export function StaffWorkbench({ id }: { id: string }) {
   const [showError, setShowError] = useState(false);
 
   if (showError) return <div className="screen-stack"><PageHeader title="Grievance workbench" /><ErrorState title="Grievance details could not refresh" onRetry={() => setShowError(false)} /></div>;
-  if (!grievance) return <div className="screen-stack"><PageHeader title="Grievance not found" description="This report is not available in the local demo dataset." /><Card><EmptyState title="No grievance found" description="Return to the triage queue to select an available report." icon={FileText} action={<Link href="/dashboard/staff/queue" className="button button-outline button-md">Back to queue</Link>} /></Card></div>;
+  if (!grievance) return <div className="screen-stack"><PageHeader title="Grievance not found" description="This grievance report was not found in the queue." /><Card><EmptyState title="No grievance found" description="Return to the triage queue to select an available report." icon={FileText} action={<Link href="/dashboard/staff/queue" className="button button-outline button-md">Back to queue</Link>} /></Card></div>;
 
   const category = CATEGORIES.find((item) => item.id === grievance.categoryId);
   const contractorSuggestions = data.contractors.filter((profile) => profile.status === "approved" && profile.tradeCategoryId === grievance.categoryId && profile.preferredZones.includes(grievance.zone)).map((profile) => ({
@@ -272,7 +271,6 @@ export function StaffWorkbench({ id }: { id: string }) {
         {grievance.status === "assigned" || grievance.status === "in_progress" || grievance.status === "resolved" ? <Card className="assigned-detail-card"><div className="assigned-business-mark"><UserCheck size={19} /></div><div><span>Assigned business</span><strong>{data.contractors.find((item) => item.id === grievance.assignedContractorId)?.businessName ?? "Contractor assigned"}</strong><p>{grievance.status === "resolved" ? "Resolution proof is available on the citizen detail." : "This contractor owns the next action."}</p></div></Card> : null}
       </aside>
     </div>
-    <button type="button" className="subtle-demo-action" onClick={() => setShowError(true)}>Preview a recoverable workbench error</button>
     <Modal open={!!confirmBid} onOpenChange={(open) => !open && setConfirmBid(null)} title="Award this bid?" description="This decision changes the grievance to Assigned and is recorded in its status history." size="md">
       {selectedBid && selectedContractor ? <div className="award-confirm-content"><div className="award-confirm-business"><span className="award-check"><CheckCircle2 size={20} /></span><div><strong>{selectedContractor.businessName}</strong><span>{selectedBid.bidNotes}</span></div></div><div className="consequence-note"><ShieldCheck size={16} /><p><strong>What happens next</strong><br />This contractor will be selected. {Math.max(0, submittedCount - 1)} other submitted {submittedCount - 1 === 1 ? "bid will be" : "bids will be"} rejected. The grievance will move to Assigned and the citizen can see the business name.</p></div><div className="dialog-actions"><Button variant="outline" onClick={() => setConfirmBid(null)}>Cancel</Button><Button onClick={confirmAward} icon={CheckCircle2}>Confirm award</Button></div></div> : null}
     </Modal>

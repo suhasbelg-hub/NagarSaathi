@@ -1,0 +1,7 @@
+{
+  "name": "NagarSaathi",
+  "description": "A clear, accountable way to report civic issues and follow them through to verified resolution.",
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

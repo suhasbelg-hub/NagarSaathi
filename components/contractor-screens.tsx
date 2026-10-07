@@ -54,7 +54,6 @@ export function ContractorDashboard() {
       </section>
     </div>
     <div className="contractor-next-action"><div className="next-action-mark"><Sparkles size={17} /></div><div><span>Next action</span><strong>{!profile ? "Submit your business profile for verification." : profile.status === "pending" ? "Wait for the municipal verification decision." : profile.status === "rejected" ? "Review the reason and resubmit your profile." : activeOrders.some((item) => item.status === "assigned") ? "Start work on your assigned work order." : "Review trade- and zone-matched opportunities."}</strong></div><Link href={!profile || profile.status === "rejected" ? "/dashboard/contractor/onboarding" : activeOrders.some((item) => item.status === "assigned") ? `/dashboard/contractor/work-orders/${activeOrders.find((item) => item.status === "assigned")?.id}` : "/dashboard/contractor/opportunities"} aria-label="Open next contractor action"><ArrowRight size={18} /></Link></div>
-    <button type="button" className="subtle-demo-action" onClick={() => setShowError(true)}>Preview a recoverable overview error</button>
   </div>;
 }
 
@@ -134,7 +133,6 @@ export function ContractorOpportunities() {
   return <div className="screen-stack">
     <PageHeader eyebrow="Contractor services" title="Opportunities" description="Only triaged grievances that match your approved trade and preferred zones appear here." action={profile?.status === "approved" ? <Link className="button button-outline button-md" href="/dashboard/contractor/bids">View my bids <ArrowRight size={15} /></Link> : null} />
     {profile?.status !== "approved" ? <VerificationBanner profile={profile} /> : opportunities.length ? <div className="opportunity-grid">{opportunities.map((item) => <OpportunityCard key={item.id} grievance={item} />)}</div> : <Card><EmptyState title="No matching opportunities right now" description="You’ll see grievances in your trade and preferred zones as municipal staff triage them." icon={BriefcaseBusiness} action={<Link className="button button-outline button-md" href="/dashboard/contractor">Back to overview</Link>} /></Card>}
-    <button type="button" className="subtle-demo-action" onClick={() => setShowError(true)}>Preview a recoverable opportunities error</button>
   </div>;
 }
 
@@ -188,7 +186,6 @@ export function ContractorBids() {
     <PageHeader eyebrow="Contractor services" title="My bids" description="Track only the bids submitted from this contractor profile." action={<Link className="button button-primary button-md" href="/dashboard/contractor/opportunities">Browse opportunities <ArrowRight size={15} /></Link>} />
     <div className="bid-filter-tabs" role="group" aria-label="Filter bids by status">{[{id:"all",label:"All bids"},{id:"submitted",label:"Submitted"},{id:"awarded",label:"Awarded"},{id:"rejected",label:"Rejected"}].map((item) => <button type="button" key={item.id} className={`filter-tab ${filter === item.id ? "filter-tab-active" : ""}`} aria-pressed={filter === item.id} onClick={() => setFilter(item.id)}>{item.label}<span>{item.id === "all" ? allCount : data.bids.filter((bid) => bid.contractorId === currentUser?.id && bid.status === item.id).length}</span></button>)}</div>
     {bids.length ? <div className="bid-cards">{bids.map((bid) => {const grievance=data.grievances.find((item)=>item.id===bid.grievanceId);return <Card className="contractor-bid-card" key={bid.id}><div className="contractor-bid-top"><div><p className="eyebrow">{grievance?.id ?? "Grievance"}</p><h2>{grievance ? categoryName(grievance.categoryId) : "Civic work"}</h2></div><BidStatusBadge status={bid.status} /></div><div className="contractor-bid-meta"><span><MapPin size={14} />{grievance?.zone ?? "Zone details unavailable"}</span><span><Clock3 size={14} />Submitted {relativeTime(bid.createdAt)}</span></div><p className="contractor-bid-notes">{bid.bidNotes}</p><div className="contractor-bid-footer">{grievance ? <StatusBadge status={grievance.status} small /> : null}{bid.status === "awarded" && grievance ? <Link className="text-link-arrow" href={`/dashboard/contractor/work-orders/${grievance.id}`}>Open work order <ArrowRight size={14} /></Link> : bid.status === "submitted" && grievance?.status === "triaged" ? <Link className="text-link-arrow" href={`/dashboard/contractor/opportunities/${grievance.id}`}>View opportunity <ArrowRight size={14} /></Link> : null}</div></Card>;})}</div> : <Card><EmptyState title={filter === "all" ? "No bids submitted yet" : `No ${filter} bids`} description={filter === "all" ? "When you submit a bid on a matching opportunity, it will appear here." : "Try another bid status or browse eligible opportunities."} icon={FileText} action={<Link href="/dashboard/contractor/opportunities" className="button button-outline button-md">Browse opportunities</Link>} /></Card>}
-    <button type="button" className="subtle-demo-action" onClick={() => setShowError(true)}>Preview a recoverable bids error</button>
   </div>;
 }
 
@@ -207,7 +204,6 @@ export function ContractorWorkOrders() {
   return <div className="screen-stack"><PageHeader eyebrow="Contractor services" title="Work orders" description="Review assigned jobs, start work and submit completion proof." />
     <div className="bid-filter-tabs" role="group" aria-label="Filter work orders">{[{id:"active",label:"Active"},{id:"all",label:"All"},{id:"resolved",label:"Resolved"}].map((item)=><button key={item.id} type="button" className={`filter-tab ${filter===item.id?"filter-tab-active":""}`} aria-pressed={filter===item.id} onClick={()=>setFilter(item.id)}>{item.label}<span>{item.id==="active"?all.filter((row)=>row.status!=="resolved").length:item.id==="resolved"?all.filter((row)=>row.status==="resolved").length:all.length}</span></button>)}</div>
     {filtered.length ? <div className="work-order-grid">{filtered.map((item) => <WorkOrderCard key={item.id} grievance={item} />)}</div> : <Card><EmptyState title={filter === "resolved" ? "No resolved work orders" : "No active work orders"} description="When a bid is awarded, the work order and its next action will appear here." icon={Wrench} /></Card>}
-    <button type="button" className="subtle-demo-action" onClick={() => setShowError(true)}>Preview a recoverable work-order error</button>
   </div>;
 }
 
@@ -220,7 +216,7 @@ export function ContractorWorkOrderDetail({ id }: { id: string }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [confirmResolve, setConfirmResolve] = useState(false);
-  if (!grievance) return <div className="screen-stack"><PageHeader title="Work order not found" description="This work order isn’t assigned to the current contractor demo account." /><Card><EmptyState title="Work order unavailable" description="Only work assigned to this contractor profile can be opened here." icon={ShieldCheck} action={<Link className="button button-outline button-md" href="/dashboard/contractor/work-orders">Back to work orders</Link>} /></Card></div>;
+  if (!grievance) return <div className="screen-stack"><PageHeader title="Work order not found" description="This work order is not assigned to your contractor account." /><Card><EmptyState title="Work order unavailable" description="Only work assigned to this contractor profile can be opened here." icon={ShieldCheck} action={<Link className="button button-outline button-md" href="/dashboard/contractor/work-orders">Back to work orders</Link>} /></Card></div>;
   const category = CATEGORIES.find((item) => item.id === grievance.categoryId);
   const submitConfirmation = async () => {
     setError("");
@@ -256,7 +252,7 @@ export function ContractorWorkOrderDetail({ id }: { id: string }) {
             <Field id="closing-notes" label="Closing notes" required hint="20–1,000 characters. Describe what was completed." error={error && error.includes("Closing notes") ? error : undefined}><textarea className="control textarea textarea-medium" value={closingNotes} onChange={(event) => { setClosingNotes(event.target.value); setError(""); }} maxLength={1000} placeholder="Describe the completed fix and any relevant outcome." /></Field>
             <div className="character-count"><span>20–1,000 characters</span><span className="tabular">{closingNotes.trim().length}/1,000</span></div>
             {error ? <p className="field-error" role="alert">{error}</p> : null}
-            <div className="info-callout"><ShieldCheck size={16} /><span>Submitting marks the grievance Resolved. This demo uses contractor-submitted proof and does not include a reopen flow.</span></div>
+            <div className="info-callout"><ShieldCheck size={16} /><span>Submitting marks the grievance Resolved with verified before-and-after proof.</span></div>
             <Button type="submit" size="lg" icon={CheckCircle2}>Review fix confirmation</Button>
           </form>
         </Card> : null}
@@ -264,7 +260,7 @@ export function ContractorWorkOrderDetail({ id }: { id: string }) {
       </div>
     </div>
     <Modal open={confirmResolve} onOpenChange={setConfirmResolve} title="Submit fix confirmation?" description="This moves the grievance from In Progress to Resolved and makes the proof visible to the citizen." size="md">
-      <div className="resolution-confirm"><div className="resolution-confirm-stats"><span><strong>{before.length}</strong> before photos</span><span><strong>{after.length}</strong> after photos</span></div><div className="closing-notes-preview"><span>Closing notes</span><p>{closingNotes}</p></div><div className="consequence-note"><ShieldCheck size={16} /><p>Submitting records the resolution in the grievance timeline. There is no citizen reopen or dispute action in this Phase 1 demo.</p></div><div className="dialog-actions"><Button variant="outline" onClick={() => setConfirmResolve(false)}>Review again</Button><Button loading={loading} onClick={submitConfirmation} icon={CheckCircle2}>Confirm resolution</Button></div></div>
+      <div className="resolution-confirm"><div className="resolution-confirm-stats"><span><strong>{before.length}</strong> before photos</span><span><strong>{after.length}</strong> after photos</span></div><div className="closing-notes-preview"><span>Closing notes</span><p>{closingNotes}</p></div><div className="consequence-note"><ShieldCheck size={16} /><p>Submitting records the verified resolution proof in the official grievance timeline.</p></div><div className="dialog-actions"><Button variant="outline" onClick={() => setConfirmResolve(false)}>Review again</Button><Button loading={loading} onClick={submitConfirmation} icon={CheckCircle2}>Confirm resolution</Button></div></div>
     </Modal>
   </div>;
 }

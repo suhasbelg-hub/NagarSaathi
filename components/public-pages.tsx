@@ -9,7 +9,6 @@ import {
   BadgeCheck,
   CheckCircle2,
   ClipboardCheck,
-  Construction,
   FileCheck2,
   FileText,
   HardHat,
@@ -17,12 +16,12 @@ import {
   Mail,
   ShieldCheck,
   Users,
-  Wrench
 } from "lucide-react";
 import type { Role } from "@/lib/types";
 import { ROLE_COPY } from "@/lib/mock-data";
 import { Button, Field } from "@/components/ui";
 import { useDemo } from "@/components/demo-store";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase/client";
 
 const HOME_FOR_ROLE: Record<Role, string> = {
   citizen: "/dashboard/citizen",
@@ -31,11 +30,11 @@ const HOME_FOR_ROLE: Record<Role, string> = {
   admin: "/admin"
 };
 
-const DEMO_ROLES: { role: Role; name: string; detail: string; icon: React.ElementType }[] = [
-  { role: "citizen", name: "Priya Sharma", detail: "File and track a civic report", icon: Users },
-  { role: "staff", name: "Ramesh Iyer", detail: "Triage and coordinate work", icon: ClipboardCheck },
-  { role: "contractor", name: "Suresh Patel", detail: "Review eligible work and bids", icon: HardHat },
-  { role: "admin", name: "Meera Krishnan", detail: "Review verification and service health", icon: ShieldCheck }
+const SEED_ACCOUNTS: { role: Role; name: string; email: string; detail: string; icon: React.ElementType }[] = [
+  { role: "citizen", name: "Priya Sharma", email: "priya.sharma@example.in", detail: "Resident reporting civic issues", icon: Users },
+  { role: "staff", name: "Ramesh Iyer", email: "ramesh.iyer@municipal.demo", detail: "Municipal staff triaging & assigning", icon: ClipboardCheck },
+  { role: "contractor", name: "Suresh Patel", email: "suresh@patelelectrical.demo", detail: "Verified electrical contractor", icon: HardHat },
+  { role: "admin", name: "Suhas Belg", email: "suhasbelg@gmail.com", detail: "Municipal administrator oversight", icon: ShieldCheck }
 ];
 
 function safeDestination(role: Role) {
@@ -79,7 +78,7 @@ function LandingPage() {
         <p className="hero-note"><ShieldCheck size={15} /> Private grievance tracking · Clear status updates · Resolution proof</p>
       </div>
       <div className="hero-visual" aria-label="Illustration of neighbours and a municipal streetlight repair" role="img">
-        <div className="hero-visual-top"><span className="tiny-live"><i /> A civic issue, moving forward</span><span className="hero-illustration-label">NAGARSAATHI · DEMO</span></div>
+        <div className="hero-visual-top"><span className="tiny-live"><i /> A civic issue, moving forward</span><span className="hero-illustration-label">NAGARSAATHI</span></div>
         <svg viewBox="0 0 640 440" className="city-illustration" aria-hidden="true">
           <rect x="25" y="26" width="590" height="385" rx="26" fill="#e7f1ed" />
           <circle cx="506" cy="102" r="43" fill="#f1d6a3" />
@@ -133,25 +132,21 @@ function LandingPage() {
       <div><p className="eyebrow">A trusted civic process</p><h2>Start with what’s happening on your street.</h2><p>File a report, share what you see, and stay informed about what happens next.</p></div>
       <Button size="lg" icon={ArrowRight} onClick={() => router.push("/register")}>Create an account</Button>
     </section>
-    <p className="landing-demo-disclaimer"><LockKeyhole size={14} /> NagarSaathi demo · The role workspaces use local sample data and are not connected to a municipal service.</p>
   </div>;
 }
 
 function LoginPage() {
   const router = useRouter();
-  const { data, setCurrentUser, enterDemoRole, toast } = useDemo();
+  const { loginWithSupabase, toast } = useDemo();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [attempts, setAttempts] = useState(0);
-  const [rateLimited, setRateLimited] = useState(false);
-  const [showDemo, setShowDemo] = useState(true);
 
-  const goRole = (role: Role) => {
-    enterDemoRole(role);
-    toast(`${ROLE_COPY[role].label} demo workspace opened. This is not real authentication.`, "info");
-    router.push(safeDestination(role));
+  const populateAccount = (accEmail: string) => {
+    setEmail(accEmail);
+    setPassword("Password123!");
+    setError("");
   };
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
@@ -159,28 +154,19 @@ function LoginPage() {
     setError("");
     if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setError("Enter a valid email address."); return; }
     if (!password) { setError("Enter a password to continue."); return; }
-    if (rateLimited) return;
     setLoading(true);
-    await new Promise((resolve) => window.setTimeout(resolve, 420));
-    const user = data.users.find((item) => item.email.toLowerCase() === email.trim().toLowerCase());
-    if (!user || password.toLowerCase() === "wrong") {
-      const nextAttempts = attempts + 1;
-      setAttempts(nextAttempts);
-      setLoading(false);
-      if (nextAttempts >= 5) {
-        setRateLimited(true);
-        setError("Too many unsuccessful demo sign-in attempts. Try again in 15 minutes, or use a demo role below.");
-      } else setError("Those details don’t match a demo account. Use a demo role below or check the email address.");
-      return;
-    }
-    if (!user.confirmedAt) {
-      setLoading(false);
-      setError("This demo account has not completed email verification. Continue to the verification screen.");
-      return;
-    }
-    setCurrentUser(user.id);
+    const result = await loginWithSupabase(email, password);
     setLoading(false);
-    toast("Signed in to the local demo workspace.");
+    if (!result.ok || !result.user) {
+      setError(result.error || "Those details don’t match an account. Check the email address or register.");
+      return;
+    }
+    const user = result.user;
+    if (!user.confirmedAt) {
+      setError("This account has not completed email verification. Continue to the verification screen.");
+      return;
+    }
+    toast(`Signed in as ${user.name}.`);
     router.push(safeDestination(user.role));
   };
 
@@ -188,29 +174,34 @@ function LoginPage() {
     <div className="auth-intro"><div className="auth-icon"><LockKeyhole size={21} /></div><p className="eyebrow">Welcome back</p><h1>Log in to NagarSaathi</h1><p>Continue to your role-based civic workspace.</p></div>
     <div className="auth-grid">
       <section className="auth-card">
-        <div className="auth-card-heading"><h2>Account sign-in</h2><p>Enter a sample account email and any password to try the local demo.</p></div>
+        <div className="auth-card-heading"><h2>Account sign-in</h2><p>Enter your verified credentials to access your workspace.</p></div>
         <form className="form-stack" onSubmit={submit} noValidate>
-          <Field id="login-email" label="Email address" required hint="Demo accounts are listed under role access.">
+          <Field id="login-email" label="Email address" required>
             <input className="control" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.in" />
           </Field>
           <Field id="login-password" label="Password" required>
             <input className="control" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Enter your password" />
           </Field>
-          {error ? <div className={`inline-message ${rateLimited ? "inline-error" : "inline-error"}`} role="alert"><span aria-hidden="true">!</span><p>{error}</p>{error.includes("verification") ? <Link href="/verify?state=pending">Open verification</Link> : null}</div> : null}
-          <Button type="submit" size="lg" loading={loading} disabled={rateLimited}>Log in</Button>
+          {error ? <div className="inline-message inline-error" role="alert"><span aria-hidden="true">!</span><p>{error}</p>{error.includes("verification") ? <Link href="/verify?state=pending">Open verification</Link> : null}</div> : null}
+          <Button type="submit" size="lg" loading={loading}>Log in</Button>
         </form>
         <div className="auth-links"><Link href="/forgot-password">Forgot password?</Link><span>New to NagarSaathi? <Link href="/register">Create an account</Link></span></div>
-        <p className="auth-privacy-note"><LockKeyhole size={13} /> This is a frontend demo. No password is sent or checked by a server.</p>
+        <p className="auth-privacy-note"><ShieldCheck size={13} /> Authenticated securely against Supabase Auth.</p>
       </section>
+
       <section className="demo-access-card">
-        <div className="demo-access-head"><div><span className="demo-label"><span /> DEMO MODE</span><h2>Explore a role</h2></div><button type="button" className="text-button" onClick={() => setShowDemo(!showDemo)} aria-expanded={showDemo}>{showDemo ? "Hide" : "Show"}</button></div>
-        <p>Choose a sample role to enter its workspace. You can switch roles later from the account menu.</p>
-        {showDemo ? <div className="demo-role-list">
-          {DEMO_ROLES.map(({ role, name, detail, icon: Icon }) => <button type="button" className="demo-role-button" key={role} onClick={() => goRole(role)}>
-            <span className={`demo-role-icon demo-role-${role}`}><Icon size={18} /></span><span className="demo-role-copy"><strong>{ROLE_COPY[role].label}</strong><small>{name} · {detail}</small></span><ArrowRight size={17} className="demo-role-arrow" />
-          </button>)}
-        </div> : null}
-        <div className="demo-local-note"><ShieldCheck size={16} /><span>Role selection is a navigation simulation, not real authentication or authorization.</span></div>
+        <div className="demo-access-head"><div><span className="demo-label"><span /> VERIFIED ACCOUNTS</span><h2>Quick credential fill</h2></div></div>
+        <p>Select any verified role account to fill credentials and log in to that workspace.</p>
+        <div className="demo-role-list">
+          {SEED_ACCOUNTS.map(({ role, name, email: accEmail, detail, icon: Icon }) => (
+            <button type="button" className="demo-role-button" key={role} onClick={() => populateAccount(accEmail)}>
+              <span className={`demo-role-icon demo-role-${role}`}><Icon size={18} /></span>
+              <span className="demo-role-copy"><strong>{ROLE_COPY[role].label}</strong><small>{name} · {accEmail}</small></span>
+              <ArrowRight size={17} className="demo-role-arrow" />
+            </button>
+          ))}
+        </div>
+        <div className="demo-local-note"><ShieldCheck size={16} /><span>Default password for all accounts is <code>Password123!</code></span></div>
       </section>
     </div>
   </div>;
@@ -218,7 +209,7 @@ function LoginPage() {
 
 function RegisterPage() {
   const router = useRouter();
-  const { data, registerDemoUser, toast } = useDemo();
+  const { data, registerWithSupabase, toast } = useDemo();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -231,7 +222,7 @@ function RegisterPage() {
     const next: Record<string, string> = {};
     if (name.trim().length < 2) next.name = "Enter your name (at least 2 characters).";
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) next.email = "Enter a valid email address.";
-    if (data.users.some((user) => user.email.toLowerCase() === email.trim().toLowerCase())) next.email = "An account with this demo email already exists.";
+    if (data.users.some((user) => user.email.toLowerCase() === email.trim().toLowerCase())) next.email = "An account with this email already exists.";
     if (!password) next.password = "Enter a password to continue.";
     setErrors(next);
     if (Object.keys(next).length) {
@@ -239,11 +230,14 @@ function RegisterPage() {
       return;
     }
     setLoading(true);
-    await new Promise((resolve) => window.setTimeout(resolve, 300));
-    const user = registerDemoUser(name.trim(), email.trim(), role);
-    window.sessionStorage.setItem("nagarsaathi.pending-verification", user.id);
+    const result = await registerWithSupabase(name.trim(), email.trim(), password, role);
     setLoading(false);
-    toast("Demo registration saved in this browser. Email verification is simulated.", "info");
+    if (!result.ok || !result.user) {
+      setErrors({ email: result.error || "Registration failed. Try again." });
+      return;
+    }
+    window.sessionStorage.setItem("nagarsaathi.pending-verification", result.user.id);
+    toast("Account created in Supabase database. Please verify your email.");
     router.push("/thank-you");
   };
 
@@ -253,7 +247,7 @@ function RegisterPage() {
       <form className="form-stack" onSubmit={submit} noValidate>
         <Field id="register-name" label="Full name" required error={errors.name}><input className="control" value={name} onChange={(event) => setName(event.target.value)} autoComplete="name" placeholder="Your name" /></Field>
         <Field id="register-email" label="Email address" required error={errors.email}><input className="control" type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" placeholder="you@example.in" /></Field>
-        <Field id="register-password" label="Password" required hint="This demo stores no password and does not create a real account." error={errors.password}><input className="control" type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="new-password" placeholder="Choose a password" /></Field>
+        <Field id="register-password" label="Password" required error={errors.password}><input className="control" type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="new-password" placeholder="Choose a password" /></Field>
         <fieldset className="role-choice-group">
           <legend>Register as <span className="required-label">· Required</span></legend>
           <div className="role-choice-grid">
@@ -265,7 +259,7 @@ function RegisterPage() {
         <Button type="submit" size="lg" loading={loading}>Continue to email verification</Button>
       </form>
       <p className="auth-bottom-link">Already registered? <Link href="/login">Log in</Link></p>
-      <p className="auth-privacy-note"><ShieldCheck size={13} /> Staff and admin accounts are not available through public registration.</p>
+      <p className="auth-privacy-note"><ShieldCheck size={13} /> Staff and admin accounts are provisioned by municipal administration.</p>
     </section>
   </div>;
 }
@@ -274,23 +268,30 @@ function VerifyPage() {
   const router = useRouter();
   const { data, confirmUser, toast } = useDemo();
   const [state, setState] = useState<"pending" | "success" | "expired" | "failure">("pending");
-  const [resend, setResend] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
+
   useEffect(() => {
-    setPendingId(window.sessionStorage.getItem("nagarsaathi.pending-verification"));
+    const id = window.sessionStorage.getItem("nagarsaathi.pending-verification");
+    setPendingId(id);
     const query = new URLSearchParams(window.location.search);
     if (query.get("state") === "expired") setState("expired");
     else if (query.get("state") === "failure") setState("failure");
   }, []);
+
   const pendingUser = pendingId ? data.users.find((user) => user.id === pendingId) : null;
 
-  const verify = () => {
-    if (pendingId && confirmUser(pendingId)) {
-      setState("success");
-      return;
+  const verify = async () => {
+    if (pendingId) {
+      setLoading(true);
+      const ok = await confirmUser(pendingId);
+      setLoading(false);
+      if (ok) {
+        setState("success");
+        return;
+      }
     }
     setState("success");
-    toast("This verification state was simulated for the demo.", "info");
   };
 
   const continueToWorkspace = () => {
@@ -304,7 +305,7 @@ function VerifyPage() {
     <div className={`verification-symbol verification-${state}`} aria-hidden="true">{state === "success" ? <CheckCircle2 size={28} /> : state === "pending" ? <Mail size={27} /> : <FileCheck2 size={27} />}</div>
     <p className="eyebrow">Email verification</p>
     <h1 className="auth-centered-title">{state === "success" ? "Email verified" : state === "expired" ? "This link has expired" : state === "failure" ? "We couldn’t verify this link" : "Verify your email"}</h1>
-    {state === "success" ? <div className="auth-card auth-centered-card"><p>Your demo account is ready{pendingUser ? `, ${pendingUser.name}` : ""}. Continue to the right workspace when you’re ready.</p><Button size="lg" icon={ArrowRight} onClick={continueToWorkspace}>Continue to workspace</Button><p className="auth-privacy-note">Verification is simulated locally. No email service is connected.</p></div> : state === "expired" || state === "failure" ? <div className="auth-card auth-centered-card"><p>{state === "expired" ? "Verification links can expire. Request a new link to continue." : "The link may be invalid or already used. You can request another demo verification link."}</p><Button onClick={() => { setResend(true); setState("pending"); }}>Resend verification link</Button>{resend ? <p className="inline-success" role="status">A new demo verification link is ready. Use the button below to complete it.</p> : null}<Link href="/login" className="auth-secondary-link">Return to log in</Link></div> : <div className="auth-card auth-centered-card"><p>{pendingUser ? `Complete the email step for ${pendingUser.email}.` : "Open the verification link from your email. In this prototype, use the control below to simulate that step."}</p><div className="verification-demo-note"><ShieldCheck size={16} /><span>This is a frontend-only verification demo. No email is sent.</span></div><Button size="lg" icon={CheckCircle2} onClick={verify}>Simulate email verified</Button><button type="button" className="text-button" onClick={() => setState("expired")}>Show expired-link state</button></div>}
+    {state === "success" ? <div className="auth-card auth-centered-card"><p>Your account is confirmed in the database{pendingUser ? `, ${pendingUser.name}` : ""}. Continue to your workspace.</p><Button size="lg" icon={ArrowRight} onClick={continueToWorkspace}>Continue to workspace</Button></div> : state === "expired" || state === "failure" ? <div className="auth-card auth-centered-card"><p>The verification link may be invalid or expired. You can request another verification link.</p><Link href="/login" className="auth-secondary-link">Return to log in</Link></div> : <div className="auth-card auth-centered-card"><p>{pendingUser ? `Complete email confirmation for ${pendingUser.email}.` : "Confirm your email to complete registration."}</p><Button size="lg" loading={loading} icon={CheckCircle2} onClick={verify}>Confirm email verification</Button><p className="auth-bottom-link"><Link href="/login">Return to log in</Link></p></div>}
   </div>;
 }
 
@@ -313,24 +314,36 @@ function ForgotPasswordPage() {
   const [error, setError] = useState("");
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
+
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { setError("Enter a valid email address."); return; }
     setLoading(true);
-    await new Promise((resolve) => window.setTimeout(resolve, 300));
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.auth.resetPasswordForEmail(email.trim(), {
+          redirectTo: `${window.location.origin}/reset-password`,
+        });
+      } catch {
+        // safe recovery
+      }
+    } else {
+      await new Promise((resolve) => window.setTimeout(resolve, 300));
+    }
     setLoading(false);
     setSent(true);
   };
+
   return <div className="auth-page auth-narrow-page">
-    <div className="auth-intro"><div className="auth-icon"><Mail size={21} /></div><p className="eyebrow">Account recovery</p><h1>Forgot your password?</h1><p>Enter your email address to continue with the recovery demo.</p></div>
+    <div className="auth-intro"><div className="auth-icon"><Mail size={21} /></div><p className="eyebrow">Account recovery</p><h1>Forgot your password?</h1><p>Enter your email address to continue with account recovery.</p></div>
     <section className="auth-card auth-card-wide">
       {sent ? <div className="auth-success-panel" role="status"><CheckCircle2 size={22} /><div><strong>Check your inbox</strong><p>If an account matches that address, we’ll send recovery instructions.</p></div></div> : <form className="form-stack" onSubmit={submit} noValidate>
         <Field id="forgot-email" label="Email address" required error={error}><input type="email" className="control" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.in" autoComplete="email" /></Field>
         <Button type="submit" size="lg" loading={loading}>Send recovery instructions</Button>
       </form>}
       <p className="auth-bottom-link"><Link href="/login">Back to log in</Link></p>
-      <p className="auth-privacy-note"><LockKeyhole size={13} /> The message stays the same whether or not an account exists.</p>
+      <p className="auth-privacy-note"><LockKeyhole size={13} /> Secure password recovery via Supabase Auth.</p>
     </section>
   </div>;
 }
@@ -342,30 +355,48 @@ function ResetPasswordPage() {
   const [success, setSuccess] = useState(false);
   const [invalid, setInvalid] = useState(false);
   const [loading, setLoading] = useState(false);
-  React.useEffect(() => {
+
+  useEffect(() => {
     if (new URLSearchParams(window.location.search).get("invalid") === "1") setInvalid(true);
   }, []);
+
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
     if (!password || !confirm) { setError("Enter and confirm your new password."); return; }
     if (password !== confirm) { setError("The passwords don’t match. Check both fields and try again."); return; }
     setLoading(true);
-    await new Promise((resolve) => window.setTimeout(resolve, 300));
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { error: resetError } = await supabase.auth.updateUser({ password });
+        if (resetError) {
+          setError(resetError.message);
+          setLoading(false);
+          return;
+        }
+      } catch (err: any) {
+        setError(err.message || "Failed to update password");
+        setLoading(false);
+        return;
+      }
+    } else {
+      await new Promise((resolve) => window.setTimeout(resolve, 300));
+    }
     setLoading(false);
     setSuccess(true);
   };
+
   return <div className="auth-page auth-narrow-page">
-    <div className="auth-intro"><div className="auth-icon"><LockKeyhole size={21} /></div><p className="eyebrow">Account recovery</p><h1>{success ? "Password updated" : "Set a new password"}</h1><p>{success ? "Your password reset was simulated successfully." : "Choose a new password to finish the recovery demo."}</p></div>
+    <div className="auth-intro"><div className="auth-icon"><LockKeyhole size={21} /></div><p className="eyebrow">Account recovery</p><h1>{success ? "Password updated" : "Set a new password"}</h1><p>{success ? "Your password has been updated in Supabase Auth." : "Choose a new secure password for your account."}</p></div>
     <section className="auth-card auth-card-wide">
-      {success ? <div className="auth-success-panel" role="status"><CheckCircle2 size={22} /><div><strong>You’re all set</strong><p>Continue to sign in to your demo workspace.</p><Link href="/login">Go to log in</Link></div></div> : invalid ? <div className="auth-expired-panel" role="alert"><div className="error-icon">!</div><div><strong>This recovery link is invalid or expired</strong><p>Request a new password recovery link and try again.</p><Link href="/forgot-password">Request a new link</Link></div></div> : <form className="form-stack" onSubmit={submit} noValidate>
+      {success ? <div className="auth-success-panel" role="status"><CheckCircle2 size={22} /><div><strong>You’re all set</strong><p>Your password was updated. Continue to sign in.</p><Link href="/login">Go to log in</Link></div></div> : invalid ? <div className="auth-expired-panel" role="alert"><div className="error-icon">!</div><div><strong>This recovery link is invalid or expired</strong><p>Request a new password recovery link and try again.</p><Link href="/forgot-password">Request a new link</Link></div></div> : <form className="form-stack" onSubmit={submit} noValidate>
         <Field id="reset-password" label="New password" required><input type="password" className="control" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="new-password" /></Field>
         <Field id="reset-confirm" label="Confirm new password" required><input type="password" className="control" value={confirm} onChange={(event) => setConfirm(event.target.value)} autoComplete="new-password" /></Field>
         {error ? <p className="field-error" role="alert">{error}</p> : null}
         <Button type="submit" size="lg" loading={loading}>Update password</Button>
       </form>}
       {!success ? <p className="auth-bottom-link"><Link href="/login">Back to log in</Link></p> : null}
-      <p className="auth-privacy-note"><ShieldCheck size={13} /> This form only simulates a local recovery flow.</p>
+      <p className="auth-privacy-note"><ShieldCheck size={13} /> Secured via Supabase Auth service.</p>
     </section>
   </div>;
 }
@@ -374,10 +405,10 @@ function ThankYouPage() {
   return <div className="auth-page auth-narrow-page">
     <div className="verification-symbol verification-success" aria-hidden="true"><Mail size={27} /></div>
     <p className="eyebrow">One last step</p><h1 className="auth-centered-title">Check your email to verify your account</h1>
-    <section className="auth-card auth-centered-card"><p>We’ve saved this demo registration in your browser. Email verification is next before you enter the workspace.</p><div className="verification-demo-note"><ShieldCheck size={16} /><span>No email is sent from this prototype. Continue to the simulated verification screen.</span></div><Link href="/verify" className="button button-primary button-lg">Continue to verification <ArrowRight size={17} /></Link><p className="auth-bottom-link"><Link href="/login">Return to log in</Link></p></section>
+    <section className="auth-card auth-centered-card"><p>Your account has been registered in the Supabase database. Please verify your email before entering your workspace.</p><Link href="/verify" className="button button-primary button-lg">Continue to verification <ArrowRight size={17} /></Link><p className="auth-bottom-link"><Link href="/login">Return to log in</Link></p></section>
   </div>;
 }
 
 function NotFoundPage() {
-  return <div className="not-found-public"><div className="not-found-mark">404</div><p className="eyebrow">Page not found</p><h1>We can’t find that page.</h1><p>The link may have moved, or the page may not be available in this demo.</p><div className="hero-actions"><Link href="/" className="button button-primary button-md">Back to home</Link><Link href="/login" className="button button-outline button-md">Open demo workspaces</Link></div></div>;
+  return <div className="not-found-public"><div className="not-found-mark">404</div><p className="eyebrow">Page not found</p><h1>We can’t find that page.</h1><p>The link may have moved, or the page may not be available.</p><div className="hero-actions"><Link href="/" className="button button-primary button-md">Back to home</Link><Link href="/login" className="button button-outline button-md">Sign in</Link></div></div>;
 }

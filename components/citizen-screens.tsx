@@ -16,7 +16,7 @@ export function CitizenDashboard() {
   const { data, currentUser, role } = useDemo();
   const [showError, setShowError] = useState(false);
   const grievances = useMemo(() => data.grievances.filter((item) => item.citizenId === currentUser?.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [data.grievances, currentUser?.id]);
-  if (showError) return <><PageHeader title="Overview" description="Your civic reports and their next steps." /><ErrorState title="Your grievances aren’t available right now" message="The local demo couldn’t refresh this view. Your saved changes are safe." onRetry={() => setShowError(false)} /></>;
+  if (showError) return <><PageHeader title="Overview" description="Your civic reports and their next steps." /><ErrorState title="Your grievances aren’t available right now" message="Unable to refresh this view. Please try again." onRetry={() => setShowError(false)} /></>;
   if (!currentUser) return <><PageHeader title="Overview" /><SkeletonRows count={4} /></>;
   const open = grievances.filter((item) => item.status !== "resolved").length;
   const inProgress = grievances.filter((item) => item.status === "in_progress").length;
@@ -39,7 +39,6 @@ export function CitizenDashboard() {
         {recent.map((grievance) => <GrievanceListCard key={grievance.id} grievance={grievance} />)}
       </div>}
     </section>
-    <button type="button" className="subtle-demo-action" onClick={() => setShowError(true)}>Preview a recoverable dashboard error</button>
   </div>;
 }
 
@@ -59,12 +58,11 @@ export function CitizenGrievanceList() {
   const [showError, setShowError] = useState(false);
   const own = data.grievances.filter((item) => item.citizenId === currentUser?.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const filtered = filter === "all" ? own : own.filter((item) => item.status === filter);
-  if (showError) return <div className="screen-stack"><PageHeader title="My grievances" description="Only reports submitted from this demo account are shown." /><ErrorState onRetry={() => setShowError(false)} /></div>;
+  if (showError) return <div className="screen-stack"><PageHeader title="My grievances" description="Only reports submitted from your account are shown." /><ErrorState onRetry={() => setShowError(false)} /></div>;
   return <div className="screen-stack">
     <PageHeader eyebrow="Citizen services" title="My grievances" description="Check a report’s status, timeline and next step." action={<Button icon={Plus} onClick={() => router.push("/dashboard/citizen/grievances/new")}>File a Grievance</Button>} />
     <Card className="filter-card"><div className="filter-row"><label htmlFor="citizen-status-filter" className="filter-label">Filter by status</label><select id="citizen-status-filter" className="control filter-select" value={filter} onChange={(event) => setFilter(event.target.value as GrievanceStatus | "all")}><option value="all">All statuses</option>{STATUS_ORDER.map((status) => <option key={status} value={status}>{status === "in_progress" ? "In Progress" : status[0].toUpperCase() + status.slice(1)}</option>)}</select><span className="result-count" aria-live="polite">{filtered.length} {filtered.length === 1 ? "report" : "reports"}</span></div></Card>
     {filtered.length ? <div className="grievance-list">{filtered.map((item) => <GrievanceListCard key={item.id} grievance={item} />)}</div> : filter === "all" ? <Card><EmptyState title="No grievances yet" description="File your first report to start tracking local issues." icon={FilePlus2} action={<Button onClick={() => router.push("/dashboard/citizen/grievances/new")}>File a Grievance</Button>} /></Card> : <Card><EmptyState title="No grievances match this status" description="Try another status or clear the filter to see all your reports." icon={FileText} compact action={<Button variant="outline" onClick={() => setFilter("all")}>Clear filter</Button>} /></Card>}
-    <button type="button" className="subtle-demo-action" onClick={() => setShowError(true)}>Preview a recoverable list error</button>
   </div>;
 }
 
@@ -127,7 +125,7 @@ export function NewGrievanceForm() {
         <div className="form-section-heading"><span className="form-step-number">02</span><div><h2>Photo evidence</h2><p>A clear photo helps the team understand the issue before they visit.</p></div></div>
         <PhotoUploader id="photos-upload" label="Issue photos" files={photos} onChange={setPhotos} min={1} max={5} />
         {errors.photos ? <p className="field-error" role="alert">{errors.photos}</p> : null}
-        <div className="upload-disclaimer"><ShieldCheck size={15} /><span>Images are resized for this local demo and stored only in your browser.</span></div>
+        <div className="upload-disclaimer"><ShieldCheck size={15} /><span>Images are uploaded directly and stored in Supabase Storage.</span></div>
         <div className="filing-submit-row"><Button type="submit" size="lg" loading={loading} icon={FilePlus2}>Submit grievance</Button><span>Required fields are marked.</span></div>
       </form>
       <aside className="filing-side-note"><div className="side-note-icon"><ShieldCheck size={19} /></div><h3>What happens next?</h3><ol><li><span>1</span><div><strong>Filed</strong><p>Your report is recorded and visible to you.</p></div></li><li><span>2</span><div><strong>Reviewed</strong><p>Municipal staff checks the details and sets a priority.</p></div></li><li><span>3</span><div><strong>Tracked</strong><p>Follow status changes and see resolution proof here.</p></div></li></ol><p className="side-note-small">Your grievance details are private to your account and the municipal team.</p></aside>
@@ -138,7 +136,7 @@ export function NewGrievanceForm() {
 export function CitizenGrievanceDetail({ id }: { id: string }) {
   const { data, currentUser } = useDemo();
   const grievance = data.grievances.find((item) => item.id === id && item.citizenId === currentUser?.id);
-  if (!grievance) return <div className="screen-stack"><PageHeader title="Grievance not found" description="We couldn’t find a report available to this demo account." /><Card><EmptyState title="This grievance isn’t available" description="It may not exist or may belong to a different demo account. Go back to your grievance list to continue." icon={ShieldCheck} action={<Link href="/dashboard/citizen/grievances" className="button button-outline button-md">Back to my grievances</Link>} /></Card></div>;
+  if (!grievance) return <div className="screen-stack"><PageHeader title="Grievance not found" description="We couldn’t find this grievance report." /><Card><EmptyState title="This grievance isn’t available" description="It may not exist or may belong to a different account. Go back to your grievance list to continue." icon={ShieldCheck} action={<Link href="/dashboard/citizen/grievances" className="button button-outline button-md">Back to my grievances</Link>} /></Card></div>;
   const category = CATEGORIES.find((item) => item.id === grievance.categoryId);
   const contractor = grievance.assignedContractorId ? data.contractors.find((item) => item.id === grievance.assignedContractorId) : null;
   return <div className="screen-stack">
@@ -184,12 +182,12 @@ export function ProfileScreen({ role }: { role: "citizen" | "staff" | "contracto
   return <div className="screen-stack">
     <PageHeader eyebrow="Account" title="Profile" description="Review your account information and update the fields available to this role." />
     <div className="profile-layout">
-      <Card className="profile-card"><div className="profile-person"><Avatar name={currentUser.name} size="lg" /><div><h2>{currentUser.name}</h2><p>{role === "staff" ? "Municipal staff" : role[0].toUpperCase() + role.slice(1)} · Demo account</p></div></div><div className="profile-detail-row"><span>Email address</span><strong>{currentUser.email}</strong><small>Read only</small></div><div className="profile-detail-row"><span>Email confirmation</span><strong>{currentUser.confirmedAt ? `Confirmed ${formatDate(currentUser.confirmedAt)}` : "Not confirmed"}</strong></div>
+      <Card className="profile-card"><div className="profile-person"><Avatar name={currentUser.name} size="lg" /><div><h2>{currentUser.name}</h2><p>{role === "staff" ? "Municipal staff" : role[0].toUpperCase() + role.slice(1)}</p></div></div><div className="profile-detail-row"><span>Email address</span><strong>{currentUser.email}</strong><small>Read only</small></div><div className="profile-detail-row"><span>Email confirmation</span><strong>{currentUser.confirmedAt ? `Confirmed ${formatDate(currentUser.confirmedAt)}` : "Not confirmed"}</strong></div>
         {role === "contractor" && contractorProfile ? <div className="contractor-profile-quick"><div className="profile-detail-row"><span>Business</span><strong>{contractorProfile.businessName}</strong></div><div className="profile-detail-row"><span>Trade</span><strong>{categoryName(contractorProfile.tradeCategoryId)}</strong></div><div className="profile-detail-row"><span>Verification</span><strong><span className={`verification-text verification-text-${contractorProfile.status}`}>{contractorProfile.status[0].toUpperCase() + contractorProfile.status.slice(1)}</span></strong></div><Link href="/dashboard/contractor/onboarding" className="text-link-arrow">Manage contractor profile <ArrowRight size={15} /></Link></div> : null}
       </Card>
       <div className="profile-forms">
         <Card><div className="form-section-heading"><span className="form-step-number"><Users size={17} /></span><div><h2>{profileTitle}</h2><p>Only your own name can be changed here.</p></div></div><form className="form-stack" onSubmit={save} noValidate><Field id="profile-name" label="Name" required error={error}><input className="control" value={name} onChange={(event) => { setName(event.target.value); setError(""); }} /></Field><Field id="profile-email" label="Email address" hint="Email is read-only for Phase 1."><input className="control" value={currentUser.email} readOnly /></Field><Button type="submit">Save name</Button>{saved ? <p className="inline-success" role="status">Name updated.</p> : null}</form></Card>
-        <Card className="password-entry-card"><div><h3>Password</h3><p>Use the account recovery flow to change your demo password.</p></div><Link href="/forgot-password" className="button button-outline button-md">Password recovery</Link></Card>
+        <Card className="password-entry-card"><div><h3>Password</h3><p>Use the account recovery flow to change your password.</p></div><Link href="/forgot-password" className="button button-outline button-md">Password recovery</Link></Card>
       </div>
     </div>
   </div>;

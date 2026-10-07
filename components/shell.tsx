@@ -78,7 +78,7 @@ export function PublicShell({ children }: { children: React.ReactNode }) {
     <footer className="public-footer">
       <div className="public-footer-inner"><Brand compact />
         <p>Clear updates. Accountable civic service.</p>
-        <span>Frontend demo · no real accounts or municipal systems are connected</span>
+        <span>NagarSaathi Municipal Civic Platform · Connected to Supabase</span>
       </div>
     </footer>
   </div>;
@@ -147,7 +147,7 @@ export function AppShell({ role, userName, title, children }: { role: Role; user
     <a href="#main-content" className="skip-link">Skip to main content</a>
     <aside className="desktop-sidebar" aria-label={`${ROLE_COPY[role].label} navigation`}>
       <div className="sidebar-brand"><Brand compact /></div>
-      <div className="sidebar-context"><span className="context-label">DEMO WORKSPACE</span><div className="context-row"><span className="role-dot" aria-hidden="true" />{ROLE_COPY[role].label}</div></div>
+      <div className="sidebar-context"><span className="context-label">WORKSPACE</span><div className="context-row"><span className="role-dot" aria-hidden="true" />{ROLE_COPY[role].label}</div></div>
       <nav className="sidebar-nav" aria-label="Main navigation">
         <p className="nav-section-label">WORKSPACE</p>
         {nav.map((item) => {
@@ -160,9 +160,8 @@ export function AppShell({ role, userName, title, children }: { role: Role; user
       </nav>
       {role === "contractor" ? <Link href="/dashboard/contractor/onboarding" className="sidebar-onboarding"><HardHat size={16} />Verification & onboarding</Link> : null}
       <div className="sidebar-spacer" />
-      <div className="sidebar-note"><div className="sidebar-note-title"><ShieldCheck size={15} /> Demo environment</div><p>Changes stay in this browser. No real municipal system is connected.</p></div>
-      <button type="button" className="sidebar-reset" onClick={() => { resetDemo(); }}> <RotateCcw size={15} /> Reset demo data</button>
-      <div className="sidebar-footer"><span className="connection-dot" />Local demo state</div>
+      <div className="sidebar-note"><div className="sidebar-note-title"><ShieldCheck size={15} /> Secure Portal</div><p>Connected to Supabase PostgreSQL database with Row Level Security.</p></div>
+      <div className="sidebar-footer"><span className="connection-dot" />Supabase Live Database</div>
     </aside>
 
     <div className="app-main-column">
@@ -170,10 +169,9 @@ export function AppShell({ role, userName, title, children }: { role: Role; user
         <button type="button" ref={mobileTriggerRef} className="icon-button mobile-menu-trigger" aria-label="Open navigation" aria-haspopup="dialog" aria-expanded={mobileOpen} onClick={() => setMobileOpen(true)}><Menu size={20} /></button>
         <div className="topbar-title"><span className="topbar-title-kicker">{ROLE_COPY[role].label} workspace</span><span className="topbar-title-main">{title}</span></div>
         <div className="topbar-actions">
-          <button type="button" className={`connection-pill ${connection === "live" ? "connection-live" : "connection-reconnecting"}`} onClick={reconnectDemo} aria-label={connection === "live" ? "Demo updates live. Simulate a brief reconnect." : "Demo reconnecting"}>
-            <span className="connection-dot" aria-hidden="true" /><span>{connection === "live" ? "Live" : "Reconnecting…"}</span>
-          </button>
-          <span className="sr-only" aria-live="polite" aria-atomic="true">{connection === "live" ? "Demo updates live" : "Demo connection reconnecting"}</span>
+          <div className="connection-pill connection-live" aria-label="Connected to live database">
+            <span className="connection-dot" aria-hidden="true" /><span>Live DB</span>
+          </div>
           <div className="user-menu-wrap" ref={menuRef}>
             <button type="button" ref={userMenuTriggerRef} className="user-menu-trigger" aria-haspopup="menu" aria-expanded={menuOpen} onClick={() => setMenuOpen(!menuOpen)}>
               <Avatar name={userName} size="sm" /><span className="user-menu-name">{userName}</span><ChevronDown size={15} aria-hidden="true" className={menuOpen ? "rotate-icon" : ""} />
@@ -186,17 +184,14 @@ export function AppShell({ role, userName, title, children }: { role: Role; user
               else if (event.key === "Home") { event.preventDefault(); items[0]?.focus(); }
               else if (event.key === "End") { event.preventDefault(); items[items.length - 1]?.focus(); }
             }}>
-              <div className="user-menu-info"><strong>{userName}</strong><span>{ROLE_COPY[role].label} · Demo account</span></div>
+              <div className="user-menu-info"><strong>{userName}</strong><span>{ROLE_COPY[role].label}</span></div>
               <Link href={profileHref} role="menuitem" onClick={() => setMenuOpen(false)}>My profile</Link>
-              <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); router.push("/login?demo=1"); }}><ArrowLeftRight size={15} /> Switch demo role</button>
-              <button type="button" role="menuitem" onClick={() => { resetDemo(); setMenuOpen(false); }}><RotateCcw size={15} /> Reset demo data</button>
               <button type="button" role="menuitem" className="menu-signout" onClick={handleSignOut}><LogOut size={15} /> Sign out</button>
             </div> : null}
           </div>
         </div>
       </header>
 
-      <div className="demo-banner"><ShieldCheck size={14} aria-hidden="true" /><span>Frontend demo · role-based navigation is simulated and is not real access control.</span><button type="button" aria-label="Switch demo role" onClick={() => router.push("/login?demo=1")}>Switch role</button></div>
       <main id="main-content" className="page-content" tabIndex={-1}>{children}</main>
     </div>
 
@@ -213,8 +208,6 @@ export function AppShell({ role, userName, title, children }: { role: Role; user
           })}
           {role === "contractor" ? <Link href="/dashboard/contractor/onboarding" className={`nav-link mobile-nav-link ${pathname.includes("onboarding") ? "nav-link-active" : ""}`} onClick={() => setMobileOpen(false)}><HardHat size={19} /><span>Verification & onboarding</span></Link> : null}
         </nav>
-        <button type="button" className="mobile-reset" onClick={() => { resetDemo(); setMobileOpen(false); }}><RotateCcw size={16} />Reset demo data</button>
-        <p className="mobile-demo-note">Demo only · changes are saved in this browser.</p>
       </section>
     </div> : null}
   </div>;

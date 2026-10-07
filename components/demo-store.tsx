@@ -1,7 +1,6 @@
 "use client";
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { CATEGORIES, DEMO_USER_ID, createInitialData, makeHistoryEntry } from "@/lib/mock-data";
 import type {
   ContractorBid,
   ContractorProfile,
@@ -12,11 +11,10 @@ import type {
   PhotoAsset,
   Priority,
   Role,
-  ToastMessage
+  ToastMessage,
 } from "@/lib/types";
 
-const DATA_KEY = "nagarsaathi.frontend-demo.v1";
-const USER_KEY = "nagarsaathi.demo-user";
+const USER_SESSION_KEY = "nagarsaathi.session-user-id";
 
 type ProfileInput = {
   businessName: string;
@@ -25,7 +23,7 @@ type ProfileInput = {
   preferredZones: string[];
 };
 
-type DemoContextValue = {
+type AppContextValue = {
   data: DemoData;
   currentUser: DemoUser | null;
   role: Role | null;
@@ -34,83 +32,38 @@ type DemoContextValue = {
   connection: "live" | "reconnecting";
   toasts: ToastMessage[];
   setCurrentUser: (id: string) => void;
-  enterDemoRole: (role: Role) => void;
   clearSession: () => void;
-  resetDemo: () => void;
-  reconnectDemo: () => void;
+  refreshData: () => Promise<void>;
   dismissToast: (id: string) => void;
   toast: (message: string, tone?: ToastMessage["tone"]) => void;
-  registerDemoUser: (name: string, email: string, role: "citizen" | "contractor") => DemoUser;
-  confirmUser: (id: string) => boolean;
-  updateOwnName: (name: string) => void;
-  createGrievance: (input: { categoryId: string; zone: string; description: string; photos: PhotoAsset[] }) => string;
-  triageGrievance: (id: string, priority: Priority) => boolean;
-  submitBid: (grievanceId: string, bidNotes: string) => { ok: boolean; bid?: ContractorBid; reason?: string };
-  awardBid: (bidId: string) => { ok: boolean; reason?: string };
-  rejectBid: (bidId: string) => boolean;
-  startWork: (grievanceId: string) => boolean;
-  submitFix: (grievanceId: string, before: PhotoAsset[], after: PhotoAsset[], closingNotes: string) => boolean;
-  saveContractorProfile: (input: ProfileInput) => { ok: boolean; reason?: string };
-  decideContractor: (profileId: string, decision: "approved" | "rejected", reason?: string) => boolean;
+  loginWithSupabase: (email: string, password?: string) => Promise<{ ok: boolean; user?: DemoUser; error?: string }>;
+  registerWithSupabase: (name: string, email: string, password: string, role: "citizen" | "contractor") => Promise<{ ok: boolean; user?: DemoUser; error?: string }>;
+  confirmUser: (id: string) => Promise<boolean>;
+  updateOwnName: (name: string) => Promise<void>;
+  createGrievance: (input: { categoryId: string; zone: string; description: string; photos: PhotoAsset[] }) => Promise<string>;
+  triageGrievance: (id: string, priority: Priority) => Promise<boolean>;
+  submitBid: (grievanceId: string, bidNotes: string) => Promise<{ ok: boolean; bid?: ContractorBid; reason?: string }>;
+  awardBid: (bidId: string) => Promise<{ ok: boolean; reason?: string }>;
+  rejectBid: (bidId: string) => Promise<boolean>;
+  startWork: (grievanceId: string) => Promise<boolean>;
+  submitFix: (grievanceId: string, before: PhotoAsset[], after: PhotoAsset[], closingNotes: string) => Promise<boolean>;
+  saveContractorProfile: (input: ProfileInput) => Promise<{ ok: boolean; reason?: string }>;
+  decideContractor: (profileId: string, decision: "approved" | "rejected", reason?: string) => Promise<boolean>;
 };
 
-const DemoContext = createContext<DemoContextValue | null>(null);
+const AppContext = createContext<AppContextValue | null>(null);
 
 export function DemoProvider({ children }: { children: React.ReactNode }) {
-  const [data, setData] = useState<DemoData>(() => createInitialData());
-  const [currentUserId, setCurrentUserId] = useState("");
+  const [data, setData] = useState<DemoData>({
+    users: [],
+    grievances: [],
+    contractors: [],
+    bids: [],
+  });
+  const [currentUserId, setCurrentUserId] = useState<string>("");
   const [ready, setReady] = useState(false);
-  const [connection, setConnection] = useState<"live" | "reconnecting">("live");
+  const [connection] = useState<"live" | "reconnecting">("live");
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
-
-  useEffect(() => {
-    try {
-      const storedData = window.localStorage.getItem(DATA_KEY);
-      const storedUser = window.sessionStorage.getItem(USER_KEY);
-      if (storedData) {
-        const parsed = JSON.parse(storedData) as DemoData;
-        if (parsed && Array.isArray(parsed.grievances) && Array.isArray(parsed.users)) setData(parsed);
-      }
-      if (storedUser) setCurrentUserId(storedUser);
-    } catch {
-      window.localStorage.removeItem(DATA_KEY);
-      window.sessionStorage.removeItem(USER_KEY);
-    }
-    setReady(true);
-  }, []);
-
-  useEffect(() => {
-    if (!ready) return;
-    try {
-      window.localStorage.setItem(DATA_KEY, JSON.stringify(data));
-    } catch {
-      // Large user uploads stay in the current session if browser storage is full.
-    }
-  }, [data, ready]);
-
-  useEffect(() => {
-    if (!ready) return;
-    if (currentUserId) window.sessionStorage.setItem(USER_KEY, currentUserId);
-    else window.sessionStorage.removeItem(USER_KEY);
-  }, [currentUserId, ready]);
-
-  useEffect(() => {
-    const handleStorage = (event: StorageEvent) => {
-      if (event.key !== DATA_KEY || !event.newValue) return;
-      try {
-        const next = JSON.parse(event.newValue) as DemoData;
-        if (next && Array.isArray(next.grievances) && Array.isArray(next.users)) setData(next);
-      } catch {
-        // Ignore malformed local demo updates and keep the last usable state.
-      }
-    };
-    window.addEventListener("storage", handleStorage);
-    return () => window.removeEventListener("storage", handleStorage);
-  }, []);
-
-  const currentUser = data.users.find((item) => item.id === currentUserId) ?? null;
-  const role = currentUser?.role ?? null;
-  const contractorProfile = data.contractors.find((item) => item.userId === currentUserId) ?? null;
 
   const toast = useCallback((message: string, tone: ToastMessage["tone"] = "success") => {
     const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -120,277 +73,400 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
 
   const dismissToast = useCallback((id: string) => setToasts((items) => items.filter((item) => item.id !== id)), []);
 
-  const setCurrentUser = useCallback((id: string) => {
-    setCurrentUserId(id);
-    window.sessionStorage.setItem(USER_KEY, id);
+  const fetchLiveData = useCallback(async () => {
+    try {
+      const res = await fetch("/api/bootstrap");
+      const json = await res.json();
+      if (json.ok && json.data) {
+        setData({
+          users: json.data.users || [],
+          grievances: json.data.grievances || [],
+          contractors: json.data.contractors || [],
+          bids: json.data.bids || [],
+        });
+      }
+    } catch (e) {
+      console.error("Failed to fetch live database records:", e);
+    }
   }, []);
 
-  const enterDemoRole = useCallback((selectedRole: Role) => {
-    setCurrentUser(DEMO_USER_ID[selectedRole]);
-  }, [setCurrentUser]);
+  // Initialize from live database
+  useEffect(() => {
+    let active = true;
+    async function init() {
+      try {
+        const storedUser = window.sessionStorage.getItem(USER_SESSION_KEY);
+        if (storedUser) {
+          setCurrentUserId(storedUser);
+        }
+        const res = await fetch("/api/bootstrap");
+        const json = await res.json();
+        if (active && json.ok && json.data) {
+          setData({
+            users: json.data.users || [],
+            grievances: json.data.grievances || [],
+            contractors: json.data.contractors || [],
+            bids: json.data.bids || [],
+          });
+        }
+      } catch (err) {
+        console.error("Initialization error:", err);
+      } finally {
+        if (active) setReady(true);
+      }
+    }
+    init();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!ready) return;
+    if (currentUserId) {
+      window.sessionStorage.setItem(USER_SESSION_KEY, currentUserId);
+    } else {
+      window.sessionStorage.removeItem(USER_SESSION_KEY);
+    }
+  }, [currentUserId, ready]);
+
+  const currentUser = data.users.find((item) => item.id === currentUserId) ?? null;
+  const role = currentUser?.role ?? null;
+  const contractorProfile = data.contractors.find((item) => item.userId === currentUserId) ?? null;
+
+  const setCurrentUser = useCallback((id: string) => {
+    setCurrentUserId(id);
+    window.sessionStorage.setItem(USER_SESSION_KEY, id);
+  }, []);
 
   const clearSession = useCallback(() => {
     setCurrentUserId("");
-    window.sessionStorage.removeItem(USER_KEY);
+    window.sessionStorage.removeItem(USER_SESSION_KEY);
   }, []);
 
-  const resetDemo = useCallback(() => {
-    setData(createInitialData());
-    const id = role ? DEMO_USER_ID[role] : "";
-    setCurrentUserId(id);
-    if (id) window.sessionStorage.setItem(USER_KEY, id);
-    else window.sessionStorage.removeItem(USER_KEY);
-    setConnection("live");
-    setToasts([]);
-  }, [role]);
+  const loginWithSupabase = useCallback(async (email: string, password?: string) => {
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const result = await res.json();
+      if (!result.ok || !result.user) {
+        return { ok: false, error: result.error || "Authentication failed" };
+      }
+      setCurrentUser(result.user.id);
+      await fetchLiveData();
+      return { ok: true, user: result.user };
+    } catch (err: any) {
+      return { ok: false, error: err.message || "Network error" };
+    }
+  }, [fetchLiveData, setCurrentUser]);
 
-  const reconnectDemo = useCallback(() => {
-    if (connection === "reconnecting") return;
-    setConnection("reconnecting");
-    toast("Demo connection interrupted. Updates will resume shortly.", "info");
-    window.setTimeout(() => {
-      setConnection("live");
-      toast("Connection restored. Your view is up to date.", "success");
-    }, 3200);
-  }, [connection, toast]);
+  const registerWithSupabase = useCallback(async (name: string, email: string, password: string, selectedRole: "citizen" | "contractor") => {
+    try {
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, password, role: selectedRole }),
+      });
+      const result = await res.json();
+      if (!result.ok || !result.user) {
+        return { ok: false, error: result.error || "Registration failed" };
+      }
+      await fetchLiveData();
+      return { ok: true, user: result.user };
+    } catch (err: any) {
+      return { ok: false, error: err.message || "Network error" };
+    }
+  }, [fetchLiveData]);
 
-  const registerDemoUser = useCallback((name: string, email: string, selectedRole: "citizen" | "contractor") => {
-    const user: DemoUser = {
-      id: `user-demo-${Date.now()}`,
-      name,
-      email,
-      role: selectedRole,
-      confirmedAt: null,
-      createdAt: new Date().toISOString()
-    };
-    setData((previous) => ({ ...previous, users: [user, ...previous.users] }));
-    return user;
-  }, []);
+  const confirmUser = useCallback(async (id: string) => {
+    try {
+      const res = await fetch("/api/auth/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: id }),
+      });
+      const result = await res.json();
+      if (result.ok) {
+        await fetchLiveData();
+        setCurrentUser(id);
+        toast("Email verified successfully. You can now access your workspace.");
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  }, [fetchLiveData, setCurrentUser, toast]);
 
-  const confirmUser = useCallback((id: string) => {
-    const target = data.users.find((item) => item.id === id);
-    if (!target) return false;
-    const confirmedAt = new Date().toISOString();
-    setData((previous) => ({
-      ...previous,
-      users: previous.users.map((item) => item.id === id ? { ...item, confirmedAt } : item)
-    }));
-    setCurrentUser(id);
-    toast("Email verified in the demo. You can now continue to your workspace.");
-    return true;
-  }, [data.users, setCurrentUser, toast]);
-
-  const updateOwnName = useCallback((name: string) => {
+  const updateOwnName = useCallback(async (name: string) => {
     if (!currentUser) return;
-    setData((previous) => ({
-      ...previous,
-      users: previous.users.map((item) => item.id === currentUser.id ? { ...item, name } : item)
-    }));
-    toast("Your name has been updated.");
-  }, [currentUser, toast]);
+    try {
+      const res = await fetch("/api/users/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: currentUser.id, name }),
+      });
+      const result = await res.json();
+      if (result.ok) {
+        await fetchLiveData();
+        toast("Your profile name has been updated in the database.");
+      }
+    } catch (e: any) {
+      toast("Failed to update name: " + e.message, "error");
+    }
+  }, [currentUser, fetchLiveData, toast]);
 
-  const createGrievance = useCallback((input: { categoryId: string; zone: string; description: string; photos: PhotoAsset[] }) => {
+  const createGrievance = useCallback(async (input: { categoryId: string; zone: string; description: string; photos: PhotoAsset[] }) => {
     if (!currentUser) return "";
-    const nextNumber = Math.max(144, ...data.grievances.map((item) => Number(item.id.split("-").at(-1)) || 0)) + 1;
-    const id = `NS-2026-${String(nextNumber).padStart(4, "0")}`;
-    const now = new Date().toISOString();
-    const grievance: Grievance = {
-      id,
-      citizenId: currentUser.id,
-      categoryId: input.categoryId,
-      zone: input.zone,
-      description: input.description.trim(),
-      photos: input.photos,
-      status: "filed",
-      priority: null,
-      assignedContractorId: null,
-      createdAt: now,
-      updatedAt: now,
-      history: [makeHistoryEntry("filed", currentUser, "Grievance filed")]
-    };
-    setData((previous) => ({ ...previous, grievances: [grievance, ...previous.grievances] }));
-    return id;
-  }, [currentUser, data.grievances]);
+    try {
+      const res = await fetch("/api/grievances", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          citizen: currentUser,
+          categoryId: input.categoryId,
+          zone: input.zone,
+          description: input.description,
+          photos: input.photos,
+        }),
+      });
+      const result = await res.json();
+      if (result.ok && result.id) {
+        await fetchLiveData();
+        return result.id;
+      }
+      toast(result.error || "Failed to record grievance in database.", "error");
+      return "";
+    } catch (e: any) {
+      toast(e.message || "Failed to submit grievance", "error");
+      return "";
+    }
+  }, [currentUser, fetchLiveData, toast]);
 
-  const triageGrievance = useCallback((id: string, priority: Priority) => {
+  const triageGrievance = useCallback(async (id: string, priority: Priority) => {
     if (!currentUser || currentUser.role !== "staff") return false;
-    const target = data.grievances.find((item) => item.id === id);
-    if (!target || target.status !== "filed") return false;
-    setData((previous) => ({
-      ...previous,
-      grievances: previous.grievances.map((item) => item.id !== id ? item : {
-        ...item,
-        status: "triaged",
-        priority,
-        updatedAt: new Date().toISOString(),
-        history: [...item.history, makeHistoryEntry("triaged", currentUser, `Priority set to ${priority}; ready for eligible contractor bids.`)]
-      })
-    }));
-    toast("Grievance moved to Triaged. Matching contractors can now review it.");
-    return true;
-  }, [currentUser, data.grievances, toast]);
+    try {
+      const res = await fetch("/api/grievances/triage", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, priority, staffUser: currentUser }),
+      });
+      const result = await res.json();
+      if (result.ok) {
+        await fetchLiveData();
+        toast("Grievance triaged in database. Matching verified contractors can now inspect and bid.");
+        return true;
+      }
+      toast(result.error || "Failed to triage grievance", "error");
+      return false;
+    } catch (e: any) {
+      toast(e.message, "error");
+      return false;
+    }
+  }, [currentUser, fetchLiveData, toast]);
 
-  const submitBid = useCallback((grievanceId: string, bidNotes: string) => {
+  const submitBid = useCallback(async (grievanceId: string, bidNotes: string) => {
     if (!currentUser || currentUser.role !== "contractor") return { ok: false, reason: "Sign in as a contractor to submit a bid." };
-    const profile = data.contractors.find((item) => item.userId === currentUser.id);
-    const grievance = data.grievances.find((item) => item.id === grievanceId);
-    if (!profile || profile.status !== "approved") return { ok: false, reason: "Your contractor profile must be approved before you can bid." };
-    if (!grievance || grievance.status !== "triaged") return { ok: false, reason: "This opportunity is no longer open for bids." };
-    const category = CATEGORIES.find((item) => item.id === grievance.categoryId);
-    if (profile.tradeCategoryId !== grievance.categoryId || !profile.preferredZones.includes(grievance.zone)) {
-      return { ok: false, reason: `This grievance is not in your ${category?.name ?? "trade"} and preferred zones.` };
+    try {
+      const res = await fetch("/api/bids", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ grievanceId, bidNotes, contractorUser: currentUser }),
+      });
+      const result = await res.json();
+      if (result.ok) {
+        await fetchLiveData();
+        toast("Bid submitted to database. Follow its status in My bids.");
+        return { ok: true, bid: { id: result.id, contractorId: currentUser.id, grievanceId, bidNotes, status: "submitted", createdAt: new Date().toISOString() } };
+      }
+      return { ok: false, reason: result.error || "Failed to submit bid." };
+    } catch (e: any) {
+      return { ok: false, reason: e.message };
     }
-    if (data.bids.some((item) => item.grievanceId === grievanceId && item.contractorId === profile.id)) {
-      return { ok: false, reason: "You have already submitted a bid for this grievance." };
-    }
-    const bid: ContractorBid = {
-      id: `bid-${Date.now()}`,
-      contractorId: profile.id,
-      grievanceId,
-      bidNotes: bidNotes.trim(),
-      status: "submitted",
-      createdAt: new Date().toISOString()
-    };
-    setData((previous) => ({ ...previous, bids: [bid, ...previous.bids] }));
-    toast("Bid submitted. You can follow its status in My bids.");
-    return { ok: true, bid };
-  }, [currentUser, data.bids, data.contractors, data.grievances, toast]);
+  }, [currentUser, fetchLiveData, toast]);
 
-  const awardBid = useCallback((bidId: string) => {
-    if (!currentUser || currentUser.role !== "staff") return { ok: false, reason: "Only municipal staff can award a bid in this demo." };
-    const bid = data.bids.find((item) => item.id === bidId);
-    const grievance = bid ? data.grievances.find((item) => item.id === bid.grievanceId) : undefined;
-    if (!bid || bid.status !== "submitted" || !grievance || grievance.status !== "triaged") {
-      return { ok: false, reason: "This grievance or bid has changed. Review the latest state before deciding." };
+  const awardBid = useCallback(async (bidId: string) => {
+    if (!currentUser || currentUser.role !== "staff") return { ok: false, reason: "Only municipal staff can award a bid." };
+    try {
+      const res = await fetch("/api/bids/award", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bidId, staffUser: currentUser }),
+      });
+      const result = await res.json();
+      if (result.ok) {
+        await fetchLiveData();
+        toast("Contractor awarded work order in database. Other bids marked rejected.");
+        return { ok: true };
+      }
+      return { ok: false, reason: result.error || "Failed to award bid." };
+    } catch (e: any) {
+      return { ok: false, reason: e.message };
     }
-    const contractor = data.contractors.find((item) => item.id === bid.contractorId);
-    setData((previous) => ({
-      ...previous,
-      bids: previous.bids.map((item) => item.grievanceId === bid.grievanceId && item.status === "submitted"
-        ? { ...item, status: item.id === bidId ? "awarded" : "rejected" }
-        : item),
-      grievances: previous.grievances.map((item) => item.id === grievance.id ? {
-        ...item,
-        status: "assigned",
-        assignedContractorId: bid.contractorId,
-        updatedAt: new Date().toISOString(),
-        history: [...item.history, makeHistoryEntry("assigned", currentUser, `${contractor?.businessName ?? "Selected contractor"} was selected for this work. Other submitted bids were rejected.`)]
-      } : item)
-    }));
-    toast(`${contractor?.businessName ?? "Contractor"} selected. Other submitted bids were rejected.`);
-    return { ok: true };
-  }, [currentUser, data.bids, data.contractors, data.grievances, toast]);
+  }, [currentUser, fetchLiveData, toast]);
 
-  const rejectBid = useCallback((bidId: string) => {
+  const rejectBid = useCallback(async (bidId: string) => {
     if (!currentUser || currentUser.role !== "staff") return false;
-    const target = data.bids.find((item) => item.id === bidId);
-    if (!target || target.status !== "submitted") return false;
-    setData((previous) => ({
-      ...previous,
-      bids: previous.bids.map((item) => item.id === bidId ? { ...item, status: "rejected" } : item)
-    }));
-    toast("Bid rejected. The grievance remains Triaged.", "info");
-    return true;
-  }, [currentUser, data.bids, toast]);
+    try {
+      const res = await fetch("/api/bids/reject", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bidId }),
+      });
+      const result = await res.json();
+      if (result.ok) {
+        await fetchLiveData();
+        toast("Bid rejected in database.", "info");
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  }, [currentUser, fetchLiveData, toast]);
 
-  const startWork = useCallback((grievanceId: string) => {
+  const startWork = useCallback(async (grievanceId: string) => {
     if (!currentUser || currentUser.role !== "contractor") return false;
-    const item = data.grievances.find((grievance) => grievance.id === grievanceId);
-    if (!item || item.status !== "assigned" || item.assignedContractorId !== currentUser.id) return false;
-    setData((previous) => ({
-      ...previous,
-      grievances: previous.grievances.map((grievance) => grievance.id === grievanceId ? {
-        ...grievance,
-        status: "in_progress",
-        updatedAt: new Date().toISOString(),
-        history: [...grievance.history, makeHistoryEntry("in_progress", currentUser, "Work started by the assigned contractor.")]
-      } : grievance)
-    }));
-    toast("Work started. The citizen can now see that work is in progress.");
-    return true;
-  }, [currentUser, data.grievances, toast]);
+    try {
+      const res = await fetch("/api/work/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ grievanceId, contractorUser: currentUser }),
+      });
+      const result = await res.json();
+      if (result.ok) {
+        await fetchLiveData();
+        toast("Work started. Status updated to In Progress in database.");
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  }, [currentUser, fetchLiveData, toast]);
 
-  const submitFix = useCallback((grievanceId: string, before: PhotoAsset[], after: PhotoAsset[], closingNotes: string) => {
+  const submitFix = useCallback(async (grievanceId: string, before: PhotoAsset[], after: PhotoAsset[], closingNotes: string) => {
     if (!currentUser || currentUser.role !== "contractor") return false;
-    const item = data.grievances.find((grievance) => grievance.id === grievanceId);
-    if (!item || item.status !== "in_progress" || item.assignedContractorId !== currentUser.id) return false;
-    setData((previous) => ({
-      ...previous,
-      grievances: previous.grievances.map((grievance) => grievance.id === grievanceId ? {
-        ...grievance,
-        status: "resolved",
-        updatedAt: new Date().toISOString(),
-        resolution: { before, after, closingNotes: closingNotes.trim() },
-        history: [...grievance.history, makeHistoryEntry("resolved", currentUser, closingNotes.trim())]
-      } : grievance)
-    }));
-    toast("Fix confirmation submitted. Resolution proof is now available to the citizen.");
-    return true;
-  }, [currentUser, data.grievances, toast]);
+    try {
+      const res = await fetch("/api/work/submit-fix", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ grievanceId, before, after, closingNotes, contractorUser: currentUser }),
+      });
+      const result = await res.json();
+      if (result.ok) {
+        await fetchLiveData();
+        toast("Fix confirmation submitted to database. Proof is now permanently recorded.");
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  }, [currentUser, fetchLiveData, toast]);
 
-  const saveContractorProfile = useCallback((input: ProfileInput) => {
+  const saveContractorProfile = useCallback(async (input: ProfileInput) => {
     if (!currentUser || currentUser.role !== "contractor") return { ok: false, reason: "Only a contractor can edit this profile." };
-    const duplicate = data.contractors.find((item) => item.licenseNumber.toLowerCase() === input.licenseNumber.trim().toLowerCase() && item.userId !== currentUser.id);
-    if (duplicate) return { ok: false, reason: "That license number is already on another demo profile." };
-    const existing = data.contractors.find((item) => item.userId === currentUser.id);
-    const profile: ContractorProfile = {
-      id: currentUser.id,
-      userId: currentUser.id,
-      businessName: input.businessName.trim(),
-      licenseNumber: input.licenseNumber.trim().toUpperCase(),
-      tradeCategoryId: input.tradeCategoryId,
-      preferredZones: input.preferredZones,
-      status: "pending",
-      rejectionReason: null,
-      approvedBy: null,
-      approvedAt: null,
-      submittedAt: new Date().toISOString()
-    };
-    setData((previous) => ({
-      ...previous,
-      contractors: existing
-        ? previous.contractors.map((item) => item.userId === currentUser.id ? profile : item)
-        : [profile, ...previous.contractors]
-    }));
-    toast("Profile submitted. Opportunities remain locked until verification is complete.");
-    return { ok: true };
-  }, [currentUser, data.contractors, toast]);
+    try {
+      const res = await fetch("/api/contractors/profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ input, contractorUser: currentUser }),
+      });
+      const result = await res.json();
+      if (result.ok) {
+        await fetchLiveData();
+        toast("Contractor profile saved to database for verification.");
+        return { ok: true };
+      }
+      return { ok: false, reason: result.error || "Failed to save profile." };
+    } catch (e: any) {
+      return { ok: false, reason: e.message };
+    }
+  }, [currentUser, fetchLiveData, toast]);
 
-  const decideContractor = useCallback((profileId: string, decision: "approved" | "rejected", reason = "") => {
+  const decideContractor = useCallback(async (profileId: string, decision: "approved" | "rejected", reason = "") => {
     if (!currentUser || currentUser.role !== "admin") return false;
-    const profile = data.contractors.find((item) => item.id === profileId);
-    if (!profile || profile.status !== "pending") return false;
-    setData((previous) => ({
-      ...previous,
-      contractors: previous.contractors.map((item) => item.id === profileId ? {
-        ...item,
-        status: decision,
-        rejectionReason: decision === "rejected" ? reason.trim() : null,
-        approvedBy: decision === "approved" ? currentUser.id : null,
-        approvedAt: decision === "approved" ? new Date().toISOString() : null
-      } : item)
-    }));
-    toast(decision === "approved" ? `${profile.businessName} is now approved.` : `${profile.businessName} was rejected with a recorded reason.`, decision === "approved" ? "success" : "info");
-    return true;
-  }, [currentUser, data.contractors, toast]);
+    try {
+      const res = await fetch("/api/contractors/decide", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ profileId, decision, reason, adminUser: currentUser }),
+      });
+      const result = await res.json();
+      if (result.ok) {
+        await fetchLiveData();
+        toast(decision === "approved" ? "Contractor profile approved in database." : "Contractor profile rejected in database.", decision === "approved" ? "success" : "info");
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  }, [currentUser, fetchLiveData, toast]);
 
-  const value = useMemo<DemoContextValue>(() => ({
-    data, currentUser, role, contractorProfile, ready, connection, toasts,
-    setCurrentUser, enterDemoRole, clearSession, resetDemo, reconnectDemo, dismissToast, toast,
-    registerDemoUser, confirmUser, updateOwnName, createGrievance, triageGrievance, submitBid, awardBid,
-    rejectBid, startWork, submitFix, saveContractorProfile, decideContractor
+  const value = useMemo<AppContextValue>(() => ({
+    data,
+    currentUser,
+    role,
+    contractorProfile,
+    ready,
+    connection,
+    toasts,
+    setCurrentUser,
+    clearSession,
+    refreshData: fetchLiveData,
+    dismissToast,
+    toast,
+    loginWithSupabase,
+    registerWithSupabase,
+    confirmUser,
+    updateOwnName,
+    createGrievance,
+    triageGrievance,
+    submitBid,
+    awardBid,
+    rejectBid,
+    startWork,
+    submitFix,
+    saveContractorProfile,
+    decideContractor,
   }), [
-    data, currentUser, role, contractorProfile, ready, connection, toasts,
-    setCurrentUser, enterDemoRole, clearSession, resetDemo, reconnectDemo, dismissToast, toast,
-    registerDemoUser, confirmUser, updateOwnName, createGrievance, triageGrievance, submitBid, awardBid,
-    rejectBid, startWork, submitFix, saveContractorProfile, decideContractor
+    data,
+    currentUser,
+    role,
+    contractorProfile,
+    ready,
+    connection,
+    toasts,
+    setCurrentUser,
+    clearSession,
+    fetchLiveData,
+    dismissToast,
+    toast,
+    loginWithSupabase,
+    registerWithSupabase,
+    confirmUser,
+    updateOwnName,
+    createGrievance,
+    triageGrievance,
+    submitBid,
+    awardBid,
+    rejectBid,
+    startWork,
+    submitFix,
+    saveContractorProfile,
+    decideContractor,
   ]);
 
-  return <DemoContext.Provider value={value}>{children}<ToastRegion /></DemoContext.Provider>;
+  return <AppContext.Provider value={value}>{children}<ToastRegion /></AppContext.Provider>;
 }
 
 export function useDemo() {
-  const context = useContext(DemoContext);
+  const context = useContext(AppContext);
   if (!context) throw new Error("useDemo must be used inside DemoProvider");
   return context;
 }

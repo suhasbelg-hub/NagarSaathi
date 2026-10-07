@@ -40,7 +40,7 @@ function isPublicRoute(pathname: string) {
 }
 
 function AppLoading() {
-  return <div className="app-loading"><span className="brand-mark" aria-hidden="true"><span /><span /><span /></span><span className="app-loading-copy">Loading NagarSaathi demo</span><Skeleton className="app-loading-line" /></div>;
+  return <div className="app-loading"><span className="brand-mark" aria-hidden="true"><span /><span /><span /></span><span className="app-loading-copy">Loading NagarSaathi…</span><Skeleton className="app-loading-line" /></div>;
 }
 
 function ProtectedNotFound({ role }: { role: Role }) {
@@ -75,8 +75,7 @@ export default function AppRouter() {
       return;
     }
     if (role && (pathname === "/login" || pathname === "/register")) {
-      const allowDemoPicker = pathname === "/login" && new URLSearchParams(window.location.search).get("demo") === "1";
-      if (!allowDemoPicker) router.replace(homeForRole[role]);
+      router.replace(homeForRole[role]);
       return;
     }
     if (role === "contractor" && !contractorProfile && pathname === "/dashboard/contractor") {
