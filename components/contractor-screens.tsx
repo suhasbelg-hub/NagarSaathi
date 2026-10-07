@@ -84,7 +84,7 @@ export function ContractorOnboarding() {
     }
     setLoading(true);
     await new Promise((resolve) => window.setTimeout(resolve, 300));
-    const result = saveContractorProfile({ businessName, licenseNumber: license, tradeCategoryId: trade, preferredZones: zones });
+    const result = await saveContractorProfile({ businessName, licenseNumber: license, tradeCategoryId: trade, preferredZones: zones });
     setLoading(false);
     if (!result.ok) { setErrors({ license: result.reason ?? "This profile could not be submitted." }); return; }
     setEditMode(false);
@@ -152,7 +152,7 @@ export function ContractorOpportunityDetail({ id }: { id: string }) {
     if (notes.trim().length < 10 || notes.trim().length > 1000) { setError("Bid notes must be between 10 and 1,000 characters."); return; }
     setLoading(true);
     await new Promise((resolve) => window.setTimeout(resolve, 250));
-    const result = submitBid(id, notes);
+    const result = await submitBid(id, notes);
     setLoading(false);
     if (!result.ok) { setError(result.reason ?? "This bid could not be submitted. Review the latest opportunity status."); return; }
     toast("Bid submitted successfully.");
@@ -225,13 +225,13 @@ export function ContractorWorkOrderDetail({ id }: { id: string }) {
     if (closingNotes.trim().length < 20 || closingNotes.trim().length > 1000) { setError("Closing notes must be between 20 and 1,000 characters."); setConfirmResolve(false); document.getElementById("closing-notes")?.focus(); return; }
     setLoading(true);
     await new Promise((resolve) => window.setTimeout(resolve, 300));
-    const ok = submitFix(grievance.id, before, after, closingNotes);
+    const ok = await submitFix(grievance.id, before, after, closingNotes);
     setLoading(false);
     setConfirmResolve(false);
     if (!ok) { setError("This work order changed before the confirmation was saved. Review its current status and try again."); return; }
   };
-  const handleStart = () => {
-    if (!startWork(grievance.id)) toast("This work order has changed. Refresh the page and review its status.", "error");
+  const handleStart = async () => {
+    if (!(await startWork(grievance.id))) toast("This work order has changed. Refresh the page and review its status.", "error");
   };
 
   return <div className="screen-stack">

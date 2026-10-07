@@ -98,7 +98,7 @@ export function NewGrievanceForm() {
     if (!validate()) return;
     setLoading(true);
     await new Promise((resolve) => window.setTimeout(resolve, 250));
-    const id = createGrievance({ categoryId, zone, description, photos });
+    const id = await createGrievance({ categoryId, zone, description, photos });
     setLoading(false);
     if (!id) { toast("We couldn’t save this report. Your form is still available to retry.", "error"); return; }
     toast("Grievance filed successfully.");
@@ -172,10 +172,10 @@ export function ProfileScreen({ role }: { role: "citizen" | "staff" | "contracto
   const [saved, setSaved] = useState(false);
   if (!currentUser) return <><PageHeader title="Profile" /><SkeletonRows count={3} /></>;
   const profileTitle = role === "contractor" ? "Account and business profile" : "Personal information";
-  const save = (event: FormEvent<HTMLFormElement>) => {
+  const save = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (name.trim().length < 2 || name.trim().length > 120) { setError("Enter a name between 2 and 120 characters."); return; }
-    updateOwnName(name.trim());
+    if (!(await updateOwnName(name.trim()))) return;
     setSaved(true);
     window.setTimeout(() => setSaved(false), 2600);
   };

@@ -229,19 +229,19 @@ export function StaffWorkbench({ id }: { id: string }) {
   const pendingRejectedProfile = pendingRejectedBid ? data.contractors.find((profile) => profile.id === pendingRejectedBid.contractorId) : null;
   const submittedCount = bids.filter((bid) => bid.status === "submitted").length;
 
-  const triage = () => {
+  const triage = async () => {
     if (!priority) { setPriorityError("Choose a priority before moving this grievance to Triaged."); document.getElementById("workbench-priority")?.focus(); return; }
-    if (!triageGrievance(grievance.id, priority)) { toast("This grievance has changed. Refresh the workbench and try again.", "error"); return; }
+    if (!(await triageGrievance(grievance.id, priority))) { toast("This grievance has changed. Refresh the workbench and try again.", "error"); return; }
   };
-  const confirmAward = () => {
+  const confirmAward = async () => {
     if (!confirmBid) return;
-    const result = awardBid(confirmBid);
+    const result = await awardBid(confirmBid);
     if (!result.ok) toast(result.reason ?? "This bid could not be awarded.", "error");
     setConfirmBid(null);
   };
-  const confirmReject = () => {
+  const confirmReject = async () => {
     if (!confirmRejectBid) return;
-    if (!rejectBid(confirmRejectBid)) toast("This bid is no longer submitted. Review the latest state.", "error");
+    if (!(await rejectBid(confirmRejectBid))) toast("This bid is no longer submitted. Review the latest state.", "error");
     setConfirmRejectBid(null);
   };
 

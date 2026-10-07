@@ -39,7 +39,7 @@ type AppContextValue = {
   loginWithSupabase: (email: string, password?: string) => Promise<{ ok: boolean; user?: DemoUser; error?: string }>;
   registerWithSupabase: (name: string, email: string, password: string, role: "citizen" | "contractor") => Promise<{ ok: boolean; user?: DemoUser; error?: string }>;
   confirmUser: (id: string) => Promise<boolean>;
-  updateOwnName: (name: string) => Promise<void>;
+  updateOwnName: (name: string) => Promise<boolean>;
   createGrievance: (input: { categoryId: string; zone: string; description: string; photos: PhotoAsset[] }) => Promise<string>;
   triageGrievance: (id: string, priority: Priority) => Promise<boolean>;
   submitBid: (grievanceId: string, bidNotes: string) => Promise<{ ok: boolean; bid?: ContractorBid; reason?: string }>;
@@ -202,7 +202,7 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
   }, [fetchLiveData, setCurrentUser, toast]);
 
   const updateOwnName = useCallback(async (name: string) => {
-    if (!currentUser) return;
+    if (!currentUser) return false;
     try {
       const res = await fetch("/api/users/update", {
         method: "POST",
@@ -213,9 +213,13 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
       if (result.ok) {
         await fetchLiveData();
         toast("Your profile name has been updated in the database.");
+        return true;
       }
+      toast(result.error || "Failed to update name.", "error");
+      return false;
     } catch (e: any) {
       toast("Failed to update name: " + e.message, "error");
+      return false;
     }
   }, [currentUser, fetchLiveData, toast]);
 
@@ -280,7 +284,8 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
       if (result.ok) {
         await fetchLiveData();
         toast("Bid submitted to database. Follow its status in My bids.");
-        return { ok: true, bid: { id: result.id, contractorId: currentUser.id, grievanceId, bidNotes, status: "submitted", createdAt: new Date().toISOString() } };
+        const bid: ContractorBid = { id: result.id, contractorId: currentUser.id, grievanceId, bidNotes, status: "submitted", createdAt: new Date().toISOString() };
+        return { ok: true, bid };
       }
       return { ok: false, reason: result.error || "Failed to submit bid." };
     } catch (e: any) {
