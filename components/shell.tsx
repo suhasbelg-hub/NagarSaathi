@@ -87,7 +87,7 @@ export function PublicShell({ children }: { children: React.ReactNode }) {
 export function AppShell({ role, userName, title, children }: { role: Role; userName: string; title: string; children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { connection, reconnectDemo, resetDemo, clearSession } = useDemo();
+  const { connection, clearSession } = useDemo();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);

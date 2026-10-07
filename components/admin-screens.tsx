@@ -103,10 +103,10 @@ export function AdminContractorVerification() {
   if (showError) return <div className="screen-stack"><PageHeader title="Contractor verification" /><ErrorState title="Verification records could not refresh" onRetry={() => setShowError(false)} /></div>;
 
   const chooseProfile = (profile: ContractorProfile) => { setSelectedId(profile.id); setDialogMode("review"); };
-  const confirmDecision = (decision: "approved" | "rejected") => {
+  const confirmDecision = async (decision: "approved" | "rejected") => {
     if (!selected) return;
     if (decision === "rejected" && (reason.trim().length < 10 || reason.trim().length > 500)) { setReasonError("Add a rejection reason between 10 and 500 characters."); return; }
-    const ok = decideContractor(selected.id, decision, reason);
+    const ok = await decideContractor(selected.id, decision, reason);
     if (!ok) { toast("This profile is no longer pending. The queue has been refreshed.", "error"); setDialogMode(null); return; }
     setReason("");setReasonError("");setDialogMode(null);
   };
